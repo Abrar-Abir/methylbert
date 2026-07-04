@@ -68,6 +68,7 @@ def finetune_arg_parser(subparsers):
 	parser.add_argument("-w", "--num_workers", type=int, default=20, help="dataloader worker size (default: 20)")
 
 	parser.add_argument("--with_cuda", default=False, action="store_true", help="training with CUDA (GPU)")
+	parser.add_argument("--with_mps", default=False, action="store_true", help="training with MPS (Apple Silicon GPU)")
 	parser.add_argument("--log_freq", type=int, default=100, help="Frequency (steps) to print the loss values (default: 100)")
 	parser.add_argument("--eval_freq", type=int, default=10, help="Evaluate the model every n iter (default: 10)")
 	parser.add_argument("--lr", type=float, default=4e-4, help="learning rate of adamW (default: 4e-4)")
@@ -152,6 +153,7 @@ def run_finetune(args):
 						  lr=args.lr, beta=(args.adam_beta1, args.adam_beta2), 
 						  weight_decay=args.adam_weight_decay,
 						  with_cuda=args.with_cuda, 
+						  with_mps=args.with_mps, 
 						  log_freq=args.log_freq,
 						  eval_freq=args.eval_freq,
 						  gradient_accumulation_steps=args.gradient_accumulation_steps, 

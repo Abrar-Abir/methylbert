@@ -32,6 +32,7 @@ def get_config(**kwargs):
             ('warmup_step', 10000),
             ('eps', 1e-6),
             ('with_cuda', True),
+            ('with_mps', False),
             ('log_freq', 10),
             ('eval_freq', 1),
             ('n_hidden', None),

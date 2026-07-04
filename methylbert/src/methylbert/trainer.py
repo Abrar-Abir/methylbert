@@ -66,13 +66,28 @@ class MethylBertTrainer(object):
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        # Setup cuda device for BERT training, argument -c, --cuda should be true
-        self._config.amp = torch.cuda.is_available() and self._config.with_cuda
-        if self._config.with_cuda and torch.cuda.device_count() < 1:
-            print("No detected GPU device. Load the model on CPU")
+        # Setup accelerator for BERT training. Priority: CUDA -> MPS -> CPU.
+        # `with_cuda` and `with_mps` are user-facing switches; the backend is
+        # only used if the corresponding runtime is actually available.
+        self._config.with_mps = getattr(self._config, "with_mps", False)
+        if self._config.with_cuda and torch.cuda.is_available() and torch.cuda.device_count() >= 1:
+            self.device = torch.device("cuda:0")
+            self._config.amp = True
+        elif self._config.with_mps and torch.backends.mps.is_available():
+            self.device = torch.device("mps")
             self._config.with_cuda = False
-        print("The model is loaded on %s"%("GPU" if self._config.with_cuda else "CPU"))
-        self.device = torch.device("cuda:0" if self._config.with_cuda else "cpu")
+            # AMP on MPS is not supported for this workload; keep off for stability.
+            self._config.amp = False
+        else:
+            if self._config.with_cuda:
+                print("No detected CUDA device. Load the model on CPU")
+            elif self._config.with_mps:
+                print("No detected MPS device. Load the model on CPU")
+            self.device = torch.device("cpu")
+            self._config.with_cuda = False
+            self._config.with_mps = False
+            self._config.amp = False
+        print("The model is loaded on %s" % self.device.type.upper())
 
         # To save the best model
         self.min_loss = np.inf
@@ -203,7 +218,8 @@ class MethylBertPretrainTrainer(MethylBertTrainer):
             data = {key: value.to(self.device) for key, value in batch.items()}
 
             with torch.no_grad():
-                with torch.autocast(device_type="cuda" if self._config.with_cuda else "cpu",
+                _autocast_device = self.device.type if self.device.type != "mps" else "cpu"
+                with torch.autocast(device_type=_autocast_device,
                                     enabled=self._config.amp):
                         mask_lm_output = self.model.forward(input_ids = data["input"],
                                                         masked_lm_labels = data["label"])
@@ -282,7 +298,8 @@ class MethylBertPretrainTrainer(MethylBertTrainer):
 
                 start = time.time()
 
-                with torch.autocast(device_type="cuda" if self._config.with_cuda else "cpu",
+                _autocast_device = self.device.type if self.device.type != "mps" else "cpu"
+                with torch.autocast(device_type=_autocast_device,
                                     enabled=self._config.amp):
                     mask_lm_output = self.model.forward(input_ids = data["bert_input"],
                                                 masked_lm_labels = data["bert_label"])
@@ -294,7 +311,7 @@ class MethylBertPretrainTrainer(MethylBertTrainer):
                 train_prediction_res["label"].append(data["bert_label"].cpu().detach())
 
                 # Calculate loss and back-propagation
-                if "cuda" in self.device.type:
+                if self.device.type in ("cuda", "mps"):
                     loss = loss.mean()
                 loss = loss/self._config.gradient_accumulation_steps
                 scaler.scale(loss).backward() if self._config.amp else loss.backward()
@@ -414,18 +431,16 @@ class MethylBertFinetuneTrainer(MethylBertTrainer):
                 # 0. batch_data will be sent into the device(GPU or cpu)
                 data = {key: value.to(self.device) for key, value in batch.items() if type(value) != list}
 
-                with torch.autocast(device_type="cuda" if self._config.with_cuda else "cpu", enabled=self._config.amp):
+                _autocast_device = self.device.type if self.device.type != "mps" else "cpu"
+                with torch.autocast(device_type=_autocast_device, enabled=self._config.amp):
                     mask_lm_output = self.model.forward(step=self.step,
                                             input_ids = data["dna_seq"],
                                             token_type_ids=data["methyl_seq"],
                                             labels = data["dmr_label"],
                                             ctype_label=data["ctype_label"])
 
-                loss = mask_lm_output["loss"].mean().item() if "cuda" in self.device.type else mask_lm_output["loss"].item()
+                loss = mask_lm_output["loss"].mean().item() if self.device.type in ("cuda", "mps") else mask_lm_output["loss"].item()
                 mean_loss += loss/len(data_loader)
-
-                if self._config.with_cuda and torch.cuda.device_count() > 1:
-                    torch.cuda.synchronize()
 
                 predict_res["dmr_label"].append(data["dmr_label"].detach().cpu())
                 predict_res["pred_ctype_label"].append(torch.argmax(mask_lm_output["classification_logits"], dim=-1).detach().cpu())
@@ -505,7 +520,8 @@ class MethylBertFinetuneTrainer(MethylBertTrainer):
                 data = {key: value.to(self.device) for key, value in batch.items() if type(value) != list}
 
                 start = time.time()
-                with torch.autocast(device_type="cuda" if self._config.with_cuda else "cpu",
+                _autocast_device = self.device.type if self.device.type != "mps" else "cpu"
+                with torch.autocast(device_type=_autocast_device,
                                     enabled=self._config.amp):
                     mask_lm_output = self.model.forward(step=self.step,
                                             input_ids=data["dna_seq"],
@@ -524,7 +540,7 @@ class MethylBertFinetuneTrainer(MethylBertTrainer):
 
 
                 # Calculate loss and back-propagation
-                loss = mask_lm_output["loss"].mean() if "cuda" in self.device.type else mask_lm_output["loss"]
+                loss = mask_lm_output["loss"].mean() if self.device.type in ("cuda", "mps") else mask_lm_output["loss"]
                 loss = loss/self._config.gradient_accumulation_steps
                 scaler.scale(loss).backward(retain_graph=True) if self._config.amp else loss.backward(retain_graph=True)
 
@@ -710,7 +726,8 @@ class MethylBertFinetuneTrainer(MethylBertTrainer):
                     res[k] = np.concatenate([res[k], v.numpy() if type(v) == torch.Tensor else v], axis=0)
 
             with torch.no_grad():
-                with torch.autocast(device_type="cuda" if self._config.with_cuda else "cpu",
+                _autocast_device = self.device.type if self.device.type != "mps" else "cpu"
+                with torch.autocast(device_type=_autocast_device,
                                     enabled=self._config.amp):
                     mask_lm_output = self.model.forward(step=0,
                                             input_ids = data["dna_seq"],
