@@ -27,3 +27,19 @@ env/
 build/
 dist/
 *.log
+
+# Local planning/docs not meant for commits
+AGENTS.md
+PLAN.md
+methylbert.md
+*.pdf
+
+# Root-level local environment files
+/.env
+/.env.*
+
+# Local report
+methylbert_m2pro_report.md
+
+# Run outputs
+/runs/
