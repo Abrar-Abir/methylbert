@@ -16,10 +16,10 @@ Agent spec for this repo. Optimize for execution fidelity, not prose.
 
 ## Local repo layout
 
-- Workspace root: `/Users/zer0/code/methylbert/` (docs only; not itself a git repo).
-- Upstream clone: `./methylbert/` (from `CompEpigen/methylbert`, base commit `f82f83b`).
-  - Patched branch: `m2pro-mps-patches` (local only, HEAD `23fc85e`; no fork, no remote push).
-  - Return to upstream state with `git -C methylbert checkout main`.
+- Workspace root: `/Users/zer0/code/methylbert/` is the git repo (personal, no upstream remote). History:
+  1. `Initial import: methylbert upstream f82f83b + workspace scaffolding` — pristine `CompEpigen/methylbert@f82f83b` vendored under `./methylbert/` alongside docs and scaffolding.
+  2. `M2 Pro MPS patches (trainer/cli/utils/config)` — the local patch set as a single commit.
+- Vendored upstream: `./methylbert/` is a plain directory (no inner `.git`). Base commit corresponds to `CompEpigen/methylbert@f82f83b`; any upstream refresh is done by re-vendoring files and rebasing/replaying the MPS patch commit on top.
 - Python env: `./.venv/` (Python 3.11.15 via `uv venv --python 3.11`, editable install of `./methylbert/`).
   - Activate: `cd /Users/zer0/code/methylbert && source .venv/bin/activate`.
   - No `pip` in venv; use `uv pip install <pkg>` to add deps.
@@ -35,7 +35,7 @@ Agent spec for this repo. Optimize for execution fidelity, not prose.
 - For M2 Pro defaults: batch 32-64, workers 4-8, 6-layer model for dev.
 - Pretraining on this machine: chr22 only.
 
-## Upstream patch requirements (applied on branch `m2pro-mps-patches`)
+## Upstream patch requirements (applied in the `M2 Pro MPS patches` commit)
 
 - `src/methylbert/trainer.py`: backend-aware device selection (cuda -> mps -> cpu); `autocast(device_type=...)` uses `self.device.type`, falling back to `"cpu"` when `device.type == "mps"`; `loss.mean()` gated on `device.type in ("cuda", "mps")`; multi-GPU `torch.cuda.synchronize()` branch removed.
 - `src/methylbert/cli.py`: `--with_mps` flag added and forwarded to `MethylBertFinetuneTrainer(with_mps=...)`.
@@ -102,8 +102,8 @@ Every run must emit a JSON manifest alongside its outputs with at least: `timest
 - Re-provision from scratch (if the venv is lost):
   1. `uv venv --python 3.11 .venv`
   2. `source .venv/bin/activate && uv pip install -e ./methylbert`
-  3. `git -C methylbert checkout m2pro-mps-patches` (or re-apply patches on `main`)
-  4. `python scripts/phase0_smoke.py`
+  3. `python scripts/phase0_smoke.py`
+- The MPS patches live in the outer git history; a fresh checkout of this repo already has them applied under `./methylbert/`. No inner git operations are required.
 - Upstream source: https://github.com/CompEpigen/methylbert
 
 ## CLI gotchas
