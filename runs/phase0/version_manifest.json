@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-07-04T07:43:51+00:00",
+  "timestamp_utc": "2026-07-04T08:09:48+00:00",
   "seed": 42,
   "device": "mps",
   "python": "3.11.15",
@@ -13,6 +13,6 @@
   "transformers": "4.44.2",
   "tokenizers": "0.19.1",
   "pysam": "0.22.1",
-  "methylbert_git_sha": "f82f83b0bc20e2af1441795536ec9f338fbbb3e7",
+  "methylbert_git_sha": "628e979bd3f4831839155ba6171ab3d927f73ea5",
   "pretrained_model": "hanyangii/methylbert_hg19_6l"
 }
