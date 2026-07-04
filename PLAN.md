@@ -28,9 +28,10 @@ Reproduction plan for the open-data experiments from [methylbert.md](methylbert.
 
 **Outcome:**
 
-- Upstream `CompEpigen/methylbert` cloned into `./methylbert/` at base commit `f82f83b`. No GitHub fork was created (user chose read-only clone); patches live on a local branch instead.
+- Upstream `CompEpigen/methylbert@f82f83b` vendored into `./methylbert/` (plain directory, no inner `.git`). Everything is tracked by the outer workspace repo.
+- Outer git repo initialized at `/Users/zer0/code/methylbert/` on branch `main`, tracking `origin` = `https://github.com/Abrar-Abir/methylbert.git` (public). History: pristine upstream import → MPS patches → docs → phase-0 manifest refresh.
 - Python 3.11.15 venv at `./.venv/` provisioned via `uv venv --python 3.11`; `./methylbert/` installed editable with pinned deps (torch 2.4.1, transformers 4.44.2, numpy 2.1.1, pysam 0.22.1, methylbert 2.0.2).
-- MPS patches applied on branch `m2pro-mps-patches` (HEAD `23fc85e`, local only):
+- MPS patches applied as a single outer-repo commit (`628e979`, `M2 Pro MPS patches (trainer/cli/utils/config)`):
   - `src/methylbert/trainer.py` — backend-aware device selection (cuda -> mps -> cpu); autocast falls back to `cpu` on MPS; `loss.mean()` gated on `device.type in ("cuda", "mps")`; multi-GPU `torch.cuda.synchronize()` branch removed.
   - `src/methylbert/cli.py` — `--with_mps` flag added and forwarded to `MethylBertFinetuneTrainer`.
   - `src/methylbert/utils.py` — `torch.cuda.manual_seed_all` guarded by `torch.cuda.is_available()`.
@@ -44,7 +45,7 @@ Reproduction plan for the open-data experiments from [methylbert.md](methylbert.
 ```bash
 cd /Users/zer0/code/methylbert
 source .venv/bin/activate
-git -C methylbert status  # should read: On branch m2pro-mps-patches
+git status  # outer repo; should be clean on main (tracking origin/main)
 python scripts/phase0_smoke.py  # sanity check before starting Phase 1+
 ```
 
@@ -158,4 +159,3 @@ python scripts/phase0_smoke.py  # sanity check before starting Phase 1+
 - **Exp 8** (leukocyte deconvolution) — add back once disk is provisioned; needs a scoped GSE186458 download plan.
 - **Baseline reproduction** — whether to reproduce competing baselines (CancerDetector, DISMIR, Houseman) or cite paper values only. Decision affects Phase 4 scope.
 - **Exp 1 simulation sweep** — whether to trim the α × length × coverage grid for time.
-- **Fork strategy** — currently a local branch (`m2pro-mps-patches`) with no remote. If patches need sharing or CI, create a GitHub fork and push this branch.
